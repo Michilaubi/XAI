@@ -1,0 +1,19 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Logs
+logs/
+*.log
+
+# Checkpoints & data
+dataset/
+checkpoints/
+imv_best*.pth
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS files
+Thumbs.db
+.DS_Store
