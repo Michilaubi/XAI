@@ -1,3 +1,11 @@
+import os, sys
+
+# walks up two levels from this file:
+repo_root = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '..', '..')
+)
+# insert it so "import IMV_LSTM.XXX" works
+sys.path.insert(0, repo_root)
 #!/usr/bin/env python
 import os
 import argparse
