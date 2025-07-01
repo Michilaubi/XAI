@@ -252,7 +252,13 @@ def train_and_evaluate_IMV(
         if val_rmse < best_val_rmse * 0.995:  # require 0.5% improvement
             best_val_rmse = val_rmse
             patience_ctr = 0
-            torch.save(model.state_dict(), "imv_best.pth")
+            torch.save({
+                'epoch': current_epoch,
+                'model_state': model.state_dict(),
+                'optim_state': optimizer.state_dict(),
+                # 'sched_state': scheduler.state_dict(),  # if you use one
+            }, os.path.join(save_dir, "checkpoint_latest.pth"))
+
             print("🎉 New best model saved.")
         else:
             patience_ctr += 1
