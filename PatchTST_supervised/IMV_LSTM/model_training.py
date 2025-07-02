@@ -195,6 +195,7 @@ def train_and_evaluate_IMV(
     patience: int = 25,
     save_attention_dir: str = "./imv_attention"
 ):
+    os.makedirs(save_attention_dir, exist_ok=True)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = nn.MSELoss()
 
