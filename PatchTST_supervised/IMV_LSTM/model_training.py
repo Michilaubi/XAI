@@ -6,12 +6,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-import numpy as np
+import os
+import torch.nn as nn
+from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.utils.data import DataLoader
 
 def mse_loss(forecasts, targets):
     return F.mse_loss(forecasts, targets)
@@ -119,22 +120,20 @@ def train_multistep_model(
 
     return model
 
-import os
-import numpy as np
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader, TensorDataset
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 def evaluate_IMV_model(
     model,
-    data_loader: DataLoader,
+    data_loader: torch.utils.data.DataLoader,
     device,
-    target_scaler=None,
+    target_scaler=None,      # Ignored when using scaled data
     save_attention: bool = False,
     save_dir: str = "./attention_test",
     print_metrics: bool = True
 ):
+    """
+    Evaluate model on data_loader, returning predictions, ground truths, raw attentions,
+    and a metrics dict using scaled data (no inverse transform).
+    """
     model.eval()
     preds_list, trues_list = [], []
     alphas_list, betas_list = [], []
@@ -144,28 +143,24 @@ def evaluate_IMV_model(
             Xb = Xb.to(device)
             yb = yb.to(device)
 
-            y_pred, alphas, betas, _ = model(Xb)    # y_pred: [B, H, 1]
-            preds_list.append(y_pred.cpu())
-            trues_list.append(yb.cpu())
-            alphas_list.append(alphas.cpu())
-            betas_list.append(betas.cpu())
+            y_pred, alphas, betas, _ = model(Xb)  # y_pred: [B, H, 1]
+            preds_list.append(y_pred.cpu().numpy())
+            trues_list.append(yb.cpu().numpy())
+            alphas_list.append(alphas.cpu().numpy())
+            betas_list.append(betas.cpu().numpy())
 
-    preds = torch.cat(preds_list).numpy()    # (N, H, 1)
-    trues = torch.cat(trues_list).numpy()    # (N, H)
-    alphas = torch.cat(alphas_list).numpy()  # (N, seq_len, D, 1)
-    betas  = torch.cat(betas_list).numpy()   # (N, H, D, 1)
+    preds = np.concatenate(preds_list, axis=0)  # (N, H, 1)
+    trues = np.concatenate(trues_list, axis=0)  # (N, H)
+    alphas = np.concatenate(alphas_list, axis=0)
+    betas  = np.concatenate(betas_list, axis=0)
 
-    # 1) Squeeze out that last singleton dimension
-    preds2 = preds.squeeze(-1)  # → (N, H)
-    # trues are already (N, H) from your DataLoader
+    # 1) Squeeze out last singleton dimension
+    preds2 = preds.squeeze(-1)  # (N, H)
+    # trues already (N, H)
 
-    # 2) Inverse‐scale if a scaler was provided
-    if target_scaler is not None:
-        # This assumes target_scaler was fit on shape (N_train, H)
-        preds2 = target_scaler.inverse_transform(preds2)
-        trues = target_scaler.inverse_transform(trues)
+    # 2) Skip inverse-scaling: use scaled data directly
 
-    # 3) Save the raw attention (before flattening) if requested
+    # 3) Save raw attention if requested
     if save_attention:
         os.makedirs(save_dir, exist_ok=True)
         np.save(os.path.join(save_dir, "alphas.npy"), alphas)
@@ -173,12 +168,12 @@ def evaluate_IMV_model(
         if print_metrics:
             print(f"✅ Saved attention maps to {save_dir}/{{alphas.npy,betas.npy}}")
 
-    # 4) Compute metrics
+    # 4) Compute metrics on scaled predictions
     y_pred_flat = preds2.reshape(-1)
     y_true_flat = trues.reshape(-1)
 
     mae  = mean_absolute_error(y_true_flat, y_pred_flat)
-    rmse = mean_squared_error(y_true_flat, y_pred_flat)
+    rmse = math.sqrt(mean_squared_error(y_true_flat, y_pred_flat))
     r2   = r2_score(y_true_flat, y_pred_flat)
 
     if print_metrics:
@@ -189,9 +184,9 @@ def evaluate_IMV_model(
 
 def train_and_evaluate_IMV(
     model,
-    train_loader: DataLoader,
-    val_loader: DataLoader,
-    test_loader: DataLoader,
+    train_loader: torch.utils.data.DataLoader,
+    val_loader: torch.utils.data.DataLoader,
+    test_loader: torch.utils.data.DataLoader,
     device,
     target_scaler,
     num_epochs: int = 100,
@@ -227,38 +222,36 @@ def train_and_evaluate_IMV(
             all_preds.append(y_pred.detach().cpu().numpy())
             all_trues.append(yb.detach().cpu().numpy())
 
-        # Aggregate training metrics
+        # Aggregate training metrics on scaled data
         avg_train_loss = sum(train_losses) / len(train_loader.dataset)
         preds_flat = np.concatenate(all_preds, axis=0).reshape(-1)
         trues_flat = np.concatenate(all_trues, axis=0).reshape(-1)
 
         train_mae  = mean_absolute_error(trues_flat, preds_flat)
-        train_rmse = mean_squared_error(trues_flat, preds_flat)
+        train_rmse = math.sqrt(mean_squared_error(trues_flat, preds_flat))
         train_r2   = r2_score(trues_flat, preds_flat)
 
         print(f"Train → Loss: {avg_train_loss:.4f}, MAE: {train_mae:.4f}, "
               f"RMSE: {train_rmse:.4f}, R²: {train_r2:.4f}")
 
-        # ——— Validation ———
+        # — Validation —
         _, _, _, _, val_metrics = evaluate_IMV_model(
             model, val_loader, device,
-            target_scaler=target_scaler,
+            target_scaler=None,  # use scaled metrics for consistency
             save_attention=False,
             print_metrics=True
         )
         val_rmse = val_metrics["RMSE"]
 
-        # Early stopping logic
-        if val_rmse < best_val_rmse * 0.995:  # require 0.5% improvement
+        # Early stopping + checkpoint
+        if val_rmse < best_val_rmse * 0.995:
             best_val_rmse = val_rmse
             patience_ctr = 0
             torch.save({
-                'epoch': current_epoch,
+                'epoch': epoch,
                 'model_state': model.state_dict(),
                 'optim_state': optimizer.state_dict(),
-                # 'sched_state': scheduler.state_dict(),  # if you use one
-            }, os.path.join(save_dir, "checkpoint_latest.pth"))
-
+            }, os.path.join(save_attention_dir, "checkpoint_latest.pth"))
             print("🎉 New best model saved.")
         else:
             patience_ctr += 1
@@ -267,17 +260,19 @@ def train_and_evaluate_IMV(
                 print("⏱ Early stopping.")
                 break
 
-    # Load best and do final eval on test set (saving its attention maps)
-    model.load_state_dict(torch.load("imv_best.pth"))
+    # Load best and final test eval on scaled data
+    best_path = os.path.join(save_attention_dir, "checkpoint_latest.pth")
+    model.load_state_dict(torch.load(best_path, map_location=device)['model_state'])
     return evaluate_IMV_model(
         model,
         test_loader,
         device,
-        target_scaler=target_scaler,
+        target_scaler=None,
         save_attention=True,
         save_dir=save_attention_dir,
         print_metrics=True
     )
+
 
 
 def plot_training_diagnostics(train_entropy, val_entropy, train_conicity=None, val_conicity=None):
