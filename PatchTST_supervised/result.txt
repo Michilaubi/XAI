@@ -1,3 +1,12 @@
 weather_int_576_144_PatchTST_Attention_custom_ftMS_sl576_ll144_pl144_dm70_nh7_el3_dl1_df280_fc1_ebtimeF_dtTrue_Exp_0  
 mse:0.12320905923843384, mae:0.26347318291664124, rse:0.5411695241928101
 
+weather_int_576_144_PatchTST_Attention_custom_ftMS_sl576_ll144_pl144_dm70_nh7_el3_dl1_df280_fc1_ebtimeF_dtTrue_Exp_0  
+mse:0.0965198278427124, mae:0.22872620820999146, rse:0.47898319363594055
+
+weather_int_288_72_PatchTST_Attention_custom_ftMS_sl288_ll72_pl72_dm70_nh7_el3_dl1_df280_fc1_ebtimeF_dtTrue_Exp_0  
+mse:0.06563416868448257, mae:0.1846669465303421, rse:0.39508572220802307
+
+weather_int_288_72_PatchTST_Attention_custom_ftMS_sl288_ll72_pl72_dm140_nh7_el3_dl1_df280_fc1_ebtimeF_dtTrue_Exp_0  
+mse:0.06719306111335754, mae:0.18828439712524414, rse:0.3997500538825989
+
