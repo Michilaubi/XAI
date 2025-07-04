@@ -44,10 +44,10 @@ for pred_len in [72]:
         "--stride", "12",
         "--des", "Exp",
         "--train_epochs", "100",
-        "--patience", "90",
+        "--patience", "10",
         "--itr", "1",
         "--batch_size", "128",
-        "--learning_rate", "0.0003",
+        "--learning_rate", "0.003",
         "--num_workers", "4",
         "--output_attention",
     ]
