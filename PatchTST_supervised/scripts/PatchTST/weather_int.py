@@ -43,7 +43,6 @@ for pred_len in [72]:
         "--patch_len", "24",
         "--stride", "12",
         "--des", "Exp",
-        "--use_amp",
         "--train_epochs", "100",
         "--patience", "14",
         "--itr", "1",
