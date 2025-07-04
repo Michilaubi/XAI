@@ -4,7 +4,7 @@ import subprocess
 # ensure log directory exists
 os.makedirs("./logs/LongForecasting", exist_ok=True)
 
-seq_len = 288
+seq_len = 432
 model_name = "PatchTST_Attention"
 root_path_name = "./dataset/"
 data_path_name = "weather_int.csv"
