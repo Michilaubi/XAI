@@ -4,7 +4,7 @@ import subprocess
 # ensure log directory exists
 os.makedirs("./logs/LongForecasting", exist_ok=True)
 
-seq_len = 576
+seq_len = 288
 model_name = "PatchTST_Attention"
 root_path_name = "C:/Users/miche/Documents/PatchTST/PatchTST_supervised/dataset/"
 data_path_name = "weather_int.csv"
@@ -13,13 +13,13 @@ data_name = "custom"
 random_seed = 2021
 
 # change horizon to 10 steps
-for pred_len in [144]:
+for pred_len in [72]:
     cmd = [
         "python", "-u", "C:/Users/miche/Documents/PatchTST/PatchTST_supervised/run_longExp_attention.py",
         "--random_seed", str(random_seed),
         "--is_training", "1",
         "--do_predict",
-        "--label_len", "144",                
+        "--label_len", "72",                
         "--root_path", root_path_name,
         "--data_path", data_path_name,
         "--model_id", f"{model_id_name}_{seq_len}_{pred_len}",
@@ -35,7 +35,7 @@ for pred_len in [144]:
         "--enc_in", "7",
         "--e_layers", "3",
         "--n_heads", "7",
-        "--d_model", "70",
+        "--d_model", "140",
         "--d_ff", "280",
         "--dropout", "0.2",
         "--fc_dropout", "0.2",
@@ -45,7 +45,7 @@ for pred_len in [144]:
         "--des", "Exp",
         "--use_amp",
         "--train_epochs", "100",
-        "--patience", "25",
+        "--patience", "14",
         "--itr", "1",
         "--batch_size", "128",
         "--learning_rate", "0.0003",
