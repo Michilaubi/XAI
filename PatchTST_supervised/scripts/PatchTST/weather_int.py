@@ -15,7 +15,7 @@ random_seed = 2021
 # change horizon to 10 steps
 for pred_len in [72]:
     cmd = [
-        "python", "-u", "/run_longExp_attention.py",
+        "python", "-u", "run_longExp_attention.py",
         "--random_seed", str(random_seed),
         "--is_training", "1",
         "--do_predict",
