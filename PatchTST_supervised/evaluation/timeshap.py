@@ -13,7 +13,7 @@ def explain_model(
     test_dataset,
     seq_len,
     target_channel=-1,
-    background_size=30,
+    background_size=20,
     pruning_kwargs=None,
     device=None,
     out_prefix="run",
