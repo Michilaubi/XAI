@@ -4,7 +4,7 @@ import subprocess
 # ensure log directory exists
 os.makedirs("./logs/LongForecasting", exist_ok=True)
 
-seq_len = 40
+seq_len = 432
 model_name = "PatchTST_Attention"
 root_path_name = "./dataset/"
 data_path_name = "weather_int.csv"
@@ -13,13 +13,13 @@ data_name = "custom"
 random_seed = 2021
 
 # change horizon to 10 steps
-for pred_len in [10]:
+for pred_len in [72]:
     cmd = [
         "python", "-u", "run_longExp_attention.py",
         "--random_seed", str(random_seed),
         "--is_training", "1",
         "--do_predict",
-        "--label_len", "10",                
+        "--label_len", "72",                
         "--root_path", root_path_name,
         "--data_path", data_path_name,
         "--model_id", f"{model_id_name}_{seq_len}_{pred_len}",
@@ -40,14 +40,14 @@ for pred_len in [10]:
         "--dropout", "0.1",
         "--fc_dropout", "0.1",
         "--head_dropout", "0",
-        "--patch_len", "8",
-        "--stride", "4",
+        "--patch_len", "24",
+        "--stride", "12",
         "--des", "Exp",
         "--train_epochs", "100",
-        "--patience", "10",
+        "--patience", "25",
         "--itr", "1",
         "--batch_size", "128",
-        "--learning_rate", "0.001",
+        "--learning_rate", "0.0003",
         "--num_workers", "4",
         "--output_attention",
     ]
