@@ -56,7 +56,7 @@ def explain_model(
     chart1.save(f"{out_prefix}_pruning.html")
 
     # 5) Event-level
-    event_dict = {"nsamples": 300}
+    event_dict = {"nsamples": 200}
     ev_attr = local_event(
         f_last,
         x_test,
@@ -70,7 +70,7 @@ def explain_model(
     chart2.save(f"{out_prefix}_event.html")
 
     # 6) Feature‐level attribution
-    feat_dict = {"nsamples": 300}
+    feat_dict = {"nsamples": 200}
     feat_attr = local_feat(
         f_last,
         x_test,
