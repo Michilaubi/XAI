@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    .error {
+        color: red;
+    }
+  </style>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm//vega@5"></script>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm//vega-lite@4.17.0"></script>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm//vega-embed@6"></script>
+</head>
+<body>
+  <div id="vis"></div>
+  <script>
+    (function(vegaEmbed) {
+      var spec = {"config": {"axis": {"domain": true, "domainColor": "#666F89", "grid": false, "gridCap": "round", "gridColor": "#B3B7C4", "gridDash": [2, 4], "gridWidth": 0.5, "labelColor": "#666F89", "labelFont": "Roboto, Arial, sans-serif", "labelPadding": 2, "tickColor": "#666F89", "tickOpacity": 0.5, "tickSize": 4, "titleColor": "#19274E", "titleFont": "Roboto, Arial, sans-serif", "titleFontSize": 12}, "axisBand": {"domain": true, "labelPadding": 4, "ticks": false}, "axisY": {"domain": false, "titleAlign": "left", "titleAngle": 0, "titleX": -20, "titleY": -10}, "legend": {"labelColor": "#666F89", "labelFont": "Roboto, Arial, sans-serif", "labelFontSize": 12, "symbolSize": 40, "titleColor": "#19274E", "titleFont": "Roboto, Arial, sans-serif", "titleFontSize": 12, "titlePadding": 4}, "arc": {"stroke": "#FFFFFF", "strokeWidth": 1}, "bar": {"fill": "#2770EB", "stroke": null}, "line": {"stroke": "#2770EB", "strokeWidth": 2}, "path": {"stroke": "#2770EB", "strokeWidth": 0.5}, "point": {"fill": "#2770EB", "shape": "circle", "filled": true}, "rect": {"fill": "#2770EB"}, "rule": {"stroke": "#666F89"}, "shape": {"stroke": "#2770EB"}, "text": {"color": "#19274E", "font": "Roboto, Arial, sans-serif", "fontSize": 12}, "range": {"category": ["#2770EB", "#77B98A", "#DA5252", "#FFC400", "#A87AEA", "#00A39E", "#19274E"], "diverging": ["#006360", "#2BB3AE", "#96D9D7", "#FFFFFF", "#EDAAAA", "#DA5252", "#811D1D"], "heatmap": ["#18448F", "#1B4EA5", "#2770EB", "#4C88EE", "#82ACF3", "#A6C4F7", "#E9F1FD"], "ramp": ["#18448F", "#1B4EA5", "#2770EB", "#4C88EE", "#82ACF3", "#A6C4F7", "#E9F1FD"]}, "background": "#FFFFFF", "group": {"fill": "#FFFFFF"}, "header": {"labelColor": "#19274E", "labelFont": "Roboto, Arial, sans-serif", "labelFontSize": 12, "titleColor": "#19274E", "titleFont": "Roboto, Arial, sans-serif", "titleFontSize": 16}, "title": {"anchor": "start", "color": "#19274E", "font": "Roboto, Arial, sans-serif", "fontSize": 20, "fontWeight": "bold", "offset": 20, "subtitleColor": "#19274E", "subtitleFontSize": 16}, "view": {"continuousHeight": 300, "continuousWidth": 400, "stroke": "transparent"}}, "layer": [{"data": {"name": "data-20ecd35e1c830914d5cf4c4eefe0c699"}, "mark": {"type": "bar", "size": 15, "thickness": 1}, "encoding": {"x": {"axis": {"grid": true, "labelFontSize": 15, "title": "Shapley Value", "titleFontSize": 15}, "field": "Shapley Value", "scale": {"domain": [-0.1, 0.4]}, "type": "quantitative"}, "y": {"axis": {"labelFontSize": 15, "title": "Feature", "titleFontSize": 15, "titleX": -61}, "field": "Feature", "sort": {"field": "sort_col", "order": "descending"}, "type": "nominal"}}}, {"data": {"name": "data-9c00aa9dc2b1c1a0b4bf9b34ead12925"}, "mark": {"type": "rule", "color": "#798184"}, "encoding": {"x": {"field": "x", "type": "quantitative"}}}], "height": 225, "width": 190, "$schema": "https://vega.github.io/schema/vega-lite/v4.17.0.json", "datasets": {"data-20ecd35e1c830914d5cf4c4eefe0c699": [{"Random seed": null, "NSamples": 300, "Feature": "f0", "Shapley Value": -0.08896514444124123, "sort_col": 0.08896514444124123}, {"Random seed": null, "NSamples": 300, "Feature": "f1", "Shapley Value": -0.08896514457369595, "sort_col": 0.08896514457369595}, {"Random seed": null, "NSamples": 300, "Feature": "f2", "Shapley Value": -0.08896514477237802, "sort_col": 0.08896514477237802}, {"Random seed": null, "NSamples": 300, "Feature": "f3", "Shapley Value": -0.08896514450746854, "sort_col": 0.08896514450746854}, {"Random seed": null, "NSamples": 300, "Feature": "f4", "Shapley Value": -0.08896514477237821, "sort_col": 0.08896514477237821}, {"Random seed": null, "NSamples": 300, "Feature": "f5", "Shapley Value": -0.08896514470615086, "sort_col": 0.08896514470615086}, {"Random seed": null, "NSamples": 300, "Feature": "f6", "Shapley Value": 1.4536181184129104, "sort_col": 1.4536181184129104}], "data-9c00aa9dc2b1c1a0b4bf9b34ead12925": [{"x": 0}]}};
+      var embedOpt = {"mode": "vega-lite"};
+
+      function showError(el, error){
+          el.innerHTML = ('<div class="error" style="color:red;">'
+                          + '<p>JavaScript Error: ' + error.message + '</p>'
+                          + "<p>This usually means there's a typo in your chart specification. "
+                          + "See the javascript console for the full traceback.</p>"
+                          + '</div>');
+          throw error;
+      }
+      const el = document.getElementById('vis');
+      vegaEmbed("#vis", spec, embedOpt)
+        .catch(error => showError(el, error));
+    })(vegaEmbed);
+
+  </script>
+</body>
+</html>
