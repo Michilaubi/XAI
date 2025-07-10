@@ -34,7 +34,7 @@ def prepare_multistep_data(
     input_window: int,
     forecast_horizon: int,
     train_ratio: float = 0.7,
-    val_ratio: float = 0.15,
+    val_ratio: float = 0.10,
     scale_data: bool = True
 ):
     """

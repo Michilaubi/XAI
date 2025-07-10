@@ -5,11 +5,9 @@ __pycache__/
 # Logs
 logs/
 *.log
+# data
+*.csv
 
-# Checkpoints & data
-dataset/
-checkpoints/
-imv_best*.pth
 
 # Jupyter
 .ipynb_checkpoints/

@@ -69,49 +69,77 @@ def evaluate(model, loader, target_channel=-1, scaler=None):
 
     return results
 
-def get_preds_truths(model, loader, device, target_channel=-1):
+def get_preds_truths(model, loader, device, args=None, target_channel=-1):
     """
     Runs the model over the loader and collects predictions & true values.
+    If `args` is given, and y comes in with length = args.label_len + args.pred_len,
+    it will automatically slice off the first args.label_len steps so you end up
+    with exactly args.pred_len ground-truth steps to compare to your preds.
     Returns:
-      preds: np.ndarray of shape [N_samples, H, 1]
-      truths: np.ndarray of shape [N_samples, H, 1]
+      preds: np.ndarray of shape [N_samples, H_pred, 1]
+      truths: np.ndarray of shape [N_samples, H_pred, 1]
     """
     model.eval()
     all_preds, all_trues = [], []
     with torch.no_grad():
         for batch in loader:
             x, y = batch[0].float().to(device), batch[1].float().to(device)
-
-            # ---- make sure y is [B, H, 1] even if loader gives [B, H] ----
+            # ensure y is [B, T, C]
             if y.dim() == 2:
                 y = y.unsqueeze(-1)
 
             # forward
             out = model(x)
-            forecasts = out[0] if isinstance(out, tuple) else out
+            forecasts = out[0] if isinstance(out, tuple) else out  # [B, T_out, C]
 
-            # slice out the channel and get shape [B, H, 1]
-            p = forecasts[:, :, target_channel].unsqueeze(-1)
-            t = y[:, :, target_channel].unsqueeze(-1)
+            # if we passed in args, crop off the label-len part
+            if args is not None:
+                expected = args.label_len + args.pred_len
+                if y.size(1) == expected:
+                    y = y[:, -args.pred_len:, :]
+
+            # select the channel
+            p = forecasts[:, :, target_channel].unsqueeze(-1)  # [B, T_out, 1]
+            t = y[:, :, target_channel].unsqueeze(-1)          # [B, T_true, 1]
 
             all_preds.append(p.cpu().numpy())
             all_trues.append(t.cpu().numpy())
 
-    return np.concatenate(all_preds, axis=0), np.concatenate(all_trues, axis=0)
+    preds = np.concatenate(all_preds, axis=0)
+    trues = np.concatenate(all_trues, axis=0)
+    return preds, trues
 
 
-def stepwise_errors(preds, truths):
+def stepwise_errors(preds, truths, target_scaler=None):
     """
-    preds, truths: np.ndarray [N, H, 1]
-    Returns lists of length H: rmse_list, mae_list
+    preds, truths: np.ndarray, shape [N, H, 1]
+    target_scaler: the fitted StandardScaler used on y (or None if you never scaled y)
+    
+    Returns:
+        rmse_list, mae_list  each of length H, in the *original* units of y
     """
-    H = preds.shape[1]
+    # reshape to [N*H, 1] so we can inverse_transform, then back to [N, H]
+    if target_scaler is not None:
+        N, H, _ = preds.shape
+        flat_pred = preds.reshape(-1, 1)
+        flat_true = truths.reshape(-1, 1)
+        
+        unscaled_pred = target_scaler.inverse_transform(flat_pred).reshape(N, H)
+        unscaled_true = target_scaler.inverse_transform(flat_true).reshape(N, H)
+    else:
+        # just drop that last dim
+        unscaled_pred = preds[..., 0]
+        unscaled_true = truths[..., 0]
+    
     rmse_list, mae_list = [], []
-    for h in range(H):
-        y_pred = preds[:, h, 0]
-        y_true = truths[:, h, 0]
+    for h in range(unscaled_pred.shape[1]):
+        y_pred = unscaled_pred[:, h]
+        y_true = unscaled_true[:, h]
+        
         rmse = np.sqrt(mean_squared_error(y_true, y_pred))
         mae  = mean_absolute_error(y_true, y_pred)
+        
         rmse_list.append(rmse)
         mae_list.append(mae)
+    
     return rmse_list, mae_list

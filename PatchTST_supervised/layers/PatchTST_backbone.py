@@ -12,133 +12,207 @@ import numpy as np
 from layers.PatchTST_layers import *
 from layers.RevIN import RevIN
 
-# Cell
+import os
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
 class PatchTST_backbone(nn.Module):
-    def __init__(self, c_in:int, context_window:int, target_window:int, patch_len:int, stride:int, max_seq_len:Optional[int]=1024, 
-                 n_layers:int=3, d_model=128, n_heads=16, d_k:Optional[int]=None, d_v:Optional[int]=None,
-                 d_ff:int=256, norm:str='BatchNorm', attn_dropout:float=0., dropout:float=0., act:str="gelu", key_padding_mask:bool='auto',
-                 padding_var:Optional[int]=None, attn_mask:Optional[Tensor]=None, res_attention:bool=True, pre_norm:bool=False, store_attn:bool=False,
-                 pe:str='zeros', learn_pe:bool=True, fc_dropout:float=0., head_dropout = 0, padding_patch = None,
-                 pretrain_head:bool=False, head_type = 'flatten', individual = False, revin = True, affine = True, subtract_last = False,
-                 verbose:bool=False, **kwargs):
-        
+    def __init__(
+        self, c_in:int, context_window:int, target_window:int,
+        patch_len:int, stride:int, max_seq_len:Optional[int]=1024,
+        n_layers:int=3, d_model: int=128, n_heads:int=16,
+        d_k:Optional[int]=None, d_v:Optional[int]=None,
+        d_ff:int=256, norm:str='BatchNorm', attn_dropout:float=0.,
+        dropout:float=0., act:str="gelu", key_padding_mask:bool='auto',
+        padding_var:Optional[int]=None, attn_mask:Optional[Tensor]=None,
+        res_attention:bool=True, pre_norm:bool=False, store_attn:bool=False,
+        pe:str='zeros', learn_pe:bool=True, fc_dropout:float=0.,
+        head_dropout:float=0, pretrain_head:bool=False,
+        head_type:str='flatten', individual:bool=False,
+        revin:bool=True, affine:bool=True, subtract_last:bool=False,
+        padding_patch=None, verbose:bool=False, **kwargs
+    ):
         super().__init__()
-        
-        # RevIn
+
+        # RevIN setup (unchanged)
         self.revin = revin
-        if self.revin: self.revin_layer = RevIN(c_in, affine=affine, subtract_last=subtract_last)
-        
-        # Patching
+        if self.revin:
+            self.revin_layer = RevIN(c_in, affine=affine, subtract_last=subtract_last)
+
+        # Compute patch_num
         self.patch_len = patch_len
-        self.stride = stride
-        self.padding_patch = padding_patch
-        patch_num = int((context_window - patch_len)/stride + 1)
-        if padding_patch == 'end': # can be modified to general case
-            self.padding_patch_layer = nn.ReplicationPad1d((0, stride)) 
+        self.stride    = stride
+        patch_num = (context_window - patch_len) // stride + 1
+        if padding_patch == 'end':
             patch_num += 1
-        
-        # Backbone 
-        self.backbone = TSTiEncoder(c_in, patch_num=patch_num, patch_len=patch_len, max_seq_len=max_seq_len,
-                                n_layers=n_layers, d_model=d_model, n_heads=n_heads, d_k=d_k, d_v=d_v, d_ff=d_ff,
-                                attn_dropout=attn_dropout, dropout=dropout, act=act, key_padding_mask=key_padding_mask, padding_var=padding_var,
-                                attn_mask=attn_mask, res_attention=res_attention, pre_norm=pre_norm, store_attn=store_attn,
-                                pe=pe, learn_pe=learn_pe, verbose=verbose, **kwargs)
+            self.padding_patch_layer = nn.ReplicationPad1d((0, stride))
+        self.padding_patch = padding_patch
 
-        # Head
-        self.head_nf = d_model * patch_num
-        self.n_vars = c_in
-        self.pretrain_head = pretrain_head
-        self.head_type = head_type
+        # Mode flag
+        self.is_cm = not individual
+
+        # Decide how many “channels” go into the encoder and effective patch_num
+        if not self.is_cm:
+            enc_c_in      = c_in
+            enc_patch_num = patch_num
+        else:
+            enc_c_in      = 1
+            enc_patch_num = patch_num * c_in
+
+        # ─── SINGLE ENCODER FOR BOTH MODES ─────────────────────────────────────────
+        self.backbone = TSTiEncoder(
+            c_in=enc_c_in,
+            patch_num=enc_patch_num,
+            patch_len=patch_len,
+            max_seq_len=max_seq_len,
+            n_layers=n_layers,
+            d_model=d_model,
+            n_heads=n_heads,
+            d_k=d_k,
+            d_v=d_v,
+            d_ff=d_ff,
+            norm=norm,
+            attn_dropout=attn_dropout,
+            dropout=dropout,
+            act=act,
+            key_padding_mask=key_padding_mask,
+            padding_var=padding_var,
+            attn_mask=attn_mask,
+            res_attention=res_attention,
+            pre_norm=pre_norm,
+            store_attn=store_attn,
+            pe=pe,
+            learn_pe=learn_pe,
+            verbose=verbose,
+            **kwargs
+        )
+
+        # ─── HEAD ─────────────────────────────────────────────────────────────────
+        self.n_vars     = c_in
         self.individual = individual
+        self.head_nf    = enc_c_in * d_model * enc_patch_num
 
-        if self.pretrain_head: 
-            self.head = self.create_pretrain_head(self.head_nf, c_in, fc_dropout) # custom head passed as a partial func with all its kwargs
-        elif head_type == 'flatten': 
-            self.head = Flatten_Head(self.individual, self.n_vars, self.head_nf, target_window, head_dropout=head_dropout)
+        if pretrain_head:
+            self.head = self.create_pretrain_head(self.head_nf, c_in, fc_dropout)
+        else:
+            self.head = Flatten_Head(
+                individual=individual,
+                n_vars=c_in,
+                nf=self.head_nf,
+                target_window=target_window,
+                head_dropout=head_dropout
+            )
 
+    def forward(self, z: Tensor):
+        # Support [B, T] → [B,1,T]
+        if z.dim() == 2:
+            z = z.unsqueeze(1)
 
+        # RevIN norm
+        if self.revin:
+            z = z.permute(0,2,1)
+            z = self.revin_layer(z, 'norm')
+            z = z.permute(0,2,1)
+
+        # Patching → [B, C, patch_num, patch_len]
+        if self.padding_patch == 'end':
+            z = self.padding_patch_layer(z)
+        z = z.unfold(-1, self.patch_len, self.stride)
+
+        # after your patch‐unfold…
+        if self.is_cm:
+            # CM: flatten C into patch_num axis
+            B, C, Pn, Pl = z.shape              # Pn = patch_num, Pl = patch_len
+            tmp = z.permute(0,1,3,2)            # [B, C, Pl, Pn]
+            z_cm = tmp.reshape(B, 1, Pl, Pn*C)  # [B, 1, Pl, Pn*C]
+            # encode one long sequence
+            z_enc_cm = self.backbone(z_cm)      # → [B, 1, d_model, Pn*C]
+            # split back into C channels & Pn patches
+            z_enc = z_enc_cm.reshape(B, C, z_enc_cm.size(2), Pn)
+        else:
+            # CI: each channel separate already → [B, C, Pl, Pn]
+            z_enc = self.backbone(z.permute(0,1,3,2))
+    
+        # now z_enc is [B, C, d_model, patch_num_effective] in both cases
+        out = self.head(z_enc)
+        # RevIN denorm
+        if self.revin:
+            if out.dim() == 2:
+                out = out.unsqueeze(1).permute(0,2,1)
+                out = self.revin_layer(out, 'denorm')
+                out = out.permute(0,2,1).squeeze(1)
+            else:
+                out = out.permute(0,2,1)
+                out = self.revin_layer(out, 'denorm')
+                out = out.permute(0,2,1)
+
+        return out
 
     def get_attention_maps(self):
-        """
-        Returns a list of softmax-normalized attention maps from each encoder layer.
-        Each element in the list corresponds to a layer's attention [B, H, Q, K].
-        """
         attn_maps = []
         for layer in self.backbone.encoder.layers:
             if hasattr(layer, 'attn') and layer.attn is not None:
-                raw_attn = layer.attn  # shape: (B, H, Q, K)
-                # Apply softmax over the last dimension (keys)
-                attn = F.softmax(raw_attn, dim=-1)
+                attn = F.softmax(layer.attn, dim=-1)
                 attn_maps.append(attn.detach().cpu())
             else:
                 attn_maps.append(None)
         return attn_maps
 
-    def forward(self, z):                                                                   # z: [bs x nvars x seq_len]
-        # norm
-        if self.revin: 
-            z = z.permute(0,2,1)
-            z = self.revin_layer(z, 'norm')
-            z = z.permute(0,2,1)
-            
-        # do patching
-        if self.padding_patch == 'end':
-            z = self.padding_patch_layer(z)
-        z = z.unfold(dimension=-1, size=self.patch_len, step=self.stride)                   # z: [bs x nvars x patch_num x patch_len]
-        z = z.permute(0,1,3,2)                                                              # z: [bs x nvars x patch_len x patch_num]
-        
-        # model
-        z = self.backbone(z)                                                                # z: [bs x nvars x d_model x patch_num]
-        z = self.head(z)                                                                    # z: [bs x nvars x target_window] 
-        
-        # denorm
-        if self.revin: 
-            z = z.permute(0,2,1)
-            z = self.revin_layer(z, 'denorm')
-            z = z.permute(0,2,1)
-        return z
-    
     def create_pretrain_head(self, head_nf, vars, dropout):
-        return nn.Sequential(nn.Dropout(dropout),
-                    nn.Conv1d(head_nf, vars, 1)
-                    )
+        return nn.Sequential(
+            nn.Dropout(dropout),
+            nn.Conv1d(head_nf, vars, 1)
+        )
+
 
 
 
 class Flatten_Head(nn.Module):
-    def __init__(self, individual, n_vars, nf, target_window, head_dropout=0):
+    def __init__(self,
+                 individual: bool,
+                 n_vars: int,
+                 nf: int,
+                 target_window: int,
+                 head_dropout: float = 0):
         super().__init__()
-        
         self.individual = individual
-        self.n_vars = n_vars
-        
+        self.n_vars     = n_vars
+
         if self.individual:
-            self.linears = nn.ModuleList()
-            self.dropouts = nn.ModuleList()
+            # channel-independent head (unchanged)
             self.flattens = nn.ModuleList()
-            for i in range(self.n_vars):
+            self.linears  = nn.ModuleList()
+            self.dropouts = nn.ModuleList()
+            for _ in range(n_vars):
                 self.flattens.append(nn.Flatten(start_dim=-2))
-                self.linears.append(nn.Linear(nf, target_window))
+                # each sub-head still maps nf_per_channel → target_window
+                self.linears.append(nn.Linear(nf // n_vars, target_window))
                 self.dropouts.append(nn.Dropout(head_dropout))
         else:
-            self.flatten = nn.Flatten(start_dim=-2)
-            self.linear = nn.Linear(nf, target_window)
+            # NEW: flatten from the channel axis onward → [B, C*d_model*patch_num] == nf
+            self.flatten = nn.Flatten(start_dim=1)
+            # map exactly nf → target_window
+            self.linear  = nn.Linear(nf, target_window)
             self.dropout = nn.Dropout(head_dropout)
-            
-    def forward(self, x):                                 # x: [bs x nvars x d_model x patch_num]
+
+    def forward(self, x: Tensor) -> Tensor:
+        # x: [B, C, d_model, patch_num]
         if self.individual:
-            x_out = []
+            out = []
             for i in range(self.n_vars):
-                z = self.flattens[i](x[:,i,:,:])          # z: [bs x d_model * patch_num]
-                z = self.linears[i](z)                    # z: [bs x target_window]
+                z = self.flattens[i](x[:, i, :, :])  # [B, d_model*patch_num]
+                z = self.linears[i](z)               # [B, target_window]
                 z = self.dropouts[i](z)
-                x_out.append(z)
-            x = torch.stack(x_out, dim=1)                 # x: [bs x nvars x target_window]
+                out.append(z)
+            return torch.stack(out, dim=1)          # [B, C, target_window]
         else:
-            x = self.flatten(x)
-            x = self.linear(x)
-            x = self.dropout(x)
-        return x
+            z = self.flatten(x)                     # [B, nf]
+            z = self.linear(z)                      # [B, target_window]
+            return self.dropout(z)
+
+
         
         
     

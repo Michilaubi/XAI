@@ -1,0 +1,67 @@
+import os
+import subprocess
+
+# ensure log directory exists
+os.makedirs("./logs/LongForecasting", exist_ok=True)
+
+seq_len = 144
+model_name = "PatchTST_Attention"
+root_path_name = "./dataset/"
+data_path_name = "weather_int.csv"
+model_id_name = "weather_int"
+data_name = "custom"
+random_seed = 2021
+
+# change horizon to 10 steps
+for pred_len in [10]:
+    cmd = [
+        "python", "-u", "./run_longExp_attention.py",
+        "--random_seed", str(random_seed),
+        "--is_training", "1",
+        "--do_predict",
+        "--label_len", "10",                
+        "--root_path", root_path_name,
+        "--data_path", data_path_name,
+        "--model_id", f"{model_id_name}_{seq_len}_{pred_len}",
+        "--model", model_name,
+        "--data", data_name,
+        "--features", "MS",
+        "--freq", "10T",
+        "--target", "T (degC)",
+        "--c_out", "1",
+        "--seq_len", str(seq_len),
+        "--pred_len", str(pred_len),
+        "--individual", "0",
+        "--enc_in", "7",
+        "--e_layers", "3",
+        "--n_heads", "7",
+        "--d_model", "140",
+        "--d_ff", "280",
+        "--dropout", "0.2",
+        "--fc_dropout", "0.3",
+        "--head_dropout", "0",
+        "--patch_len", "12",
+        "--stride", "6",
+        "--des", "Exp",
+        "--train_epochs", "100",
+        "--patience", "25",
+        "--itr", "1",
+        "--pct_start",      "0.5", 
+        "--learning_rate", "0.00005",
+        "--batch_size", "128",
+        "--num_workers", "4",
+        "--output_attention",
+    ]
+
+    log_file = f"./logs/LongForecasting/{model_name}_{model_id_name}_{seq_len}_{pred_len}.log"
+    print(f"Running experiment with pred_len={pred_len}, logging to {log_file} ...")
+
+    with open(log_file, "w") as f:
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        for line in process.stdout:
+            print(line, end='')   # print to console
+            f.write(line)         # write to log file
+
+    print(f"Experiment for pred_len={pred_len} finished.\n")
+
+print("All experiments completed.")
